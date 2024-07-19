@@ -3,16 +3,16 @@ version: '3.9'
 
 services:
 
-  python-shell:
-    image: my_python_env:3.10
-    hostname: python-shell
-    container_name: python-shell
-    command: bash
-    tty: true
+  jupyter:
     build:
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.jupyter
+      context: .
+    ports:
+      - 8889:8888
     volumes:
-        - ./taxi-data:/taxi-data:ro
+      - ./notebooks:/home/jovyan/notebooks
+      - ./taxi-data:/home/jovyan/taxi-data:ro
+    command: start-notebook.py --NotebookApp.token='my-token'
 
   db:
     image: postgres
@@ -31,6 +31,3 @@ services:
       POSTGRES_DB: taxi_db
     ports:
       - 5432:5432
-
-volumes:
-  taxi-data:
