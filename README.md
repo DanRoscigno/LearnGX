@@ -33,3 +33,9 @@ http://127.0.0.1:8889/
 ### Work with the data
 
 Follow along with the notebook `YellowCab.ipynb`. I have not figured out why the output of `context.open_data_docs()` is not published.
+
+It looks like I need to do a `build` of the docs and then copy the content generated to a place where it can be served:
+
+<img width="450" alt="image" src="https://github.com/user-attachments/assets/ca8fea07-a33a-4bbb-ae53-2f5059ccd5df">
+
+The Jupyter server has a web server running, possibly I can put the files from `/tmp` in a spot where it will serve them.
