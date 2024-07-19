@@ -3,3 +3,4 @@ sqlalchemy
 sqlalchemy-utils
 psycopg2-binary
 pandas
+pgcli

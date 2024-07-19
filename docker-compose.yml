@@ -11,12 +11,14 @@ services:
     tty: true
     build:
       dockerfile: Dockerfile
+    volumes:
+        - ./taxi-data:/taxi-data:ro
 
   db:
     image: postgres
     restart: always
     # set shared memory limit when using docker-compose
-    shm_size: 128mb
+    shm_size: 512mb
     # or set shared memory limit when deploy via swarm stack
     #volumes:
     #  - type: tmpfs
@@ -30,3 +32,5 @@ services:
     ports:
       - 5432:5432
 
+volumes:
+  taxi-data:

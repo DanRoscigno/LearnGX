@@ -34,6 +34,50 @@ docker compose exec python-shell bash
 python
 ```
 
+### Create the table and load data
+
+The database `taxi_db` was created, and the password for user `postgres` was set to `example` during the initialization of the Postgres instance because the Docker Compose file includes sets these environment variables:
+
+```yaml
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: taxi_db
+```
+
+This code can be run to examine the schema of the Yellow Taxi data and create a table in the `taxi_db` database of Postgresql sserver `db`:
+
+```python
+import pandas as pd
+
+df = pd.read_csv(
+    'taxi-data/yellow_tripdata_sample_2020-09.csv', 
+    nrows=100, 
+    parse_dates=['pickup_datetime', 'dropoff_datetime'], 
+)
+
+print(pd.io.sql.get_schema(df, name='yellow_taxi_data'))
+
+from sqlalchemy import create_engine
+
+engine = create_engine('postgresql://postgres:example@db:5432/taxi_db')
+
+print(pd.io.sql.get_schema(df, name='yellow_taxi_data', con=engine)) 
+
+df.head(n=0).to_sql(name='yellow_taxi_data', con=engine, if_exists='replace')
+```
+
+### Load the data
+
+```python
+df = pd.read_csv( 
+    'taxi-data/yellow_tripdata_sample_2020-09.csv', 
+    parse_dates=['pickup_datetime', 'dropoff_datetime'] 
+)
+
+df.to_sql(name='yellow_taxi_data', con=engine, if_exists='append', chunksize=1000)
+```
+
 ### Import and setup Postgresql connection
 
 ```python
@@ -55,39 +99,51 @@ pg_datasource = context.sources.add_postgres(
 ```
 
 ```python
-# Note: the module name is psycopg, not psycopg3
-import psycopg
+pg_datasource.add_table_asset(
+    name="yellow_taxi_data", table_name="yellow_taxi_data"
+)
 
-# Connect to an existing database
-with psycopg.connect("dbname=test user=postgres") as conn:
+batch_request = pg_datasource.get_asset("yellow_taxi_data").build_batch_request()
 
-    # Open a cursor to perform database operations
-    with conn.cursor() as cur:
+expectation_suite_name = "insert_your_expectation_suite_name_here"
+context.add_or_update_expectation_suite(expectation_suite_name=expectation_suite_name)
+validator = context.get_validator(
+    batch_request=batch_request,
+    expectation_suite_name=expectation_suite_name,
+)
 
-        # Execute a command: this creates a new table
-        cur.execute("""
-            CREATE TABLE test (
-                id serial PRIMARY KEY,
-                num integer,
-                data text)
-            """)
+print(validator.head())
 
-        # Pass data to fill a query placeholders and let Psycopg perform
-        # the correct conversion (no SQL injections!)
-        cur.execute(
-            "INSERT INTO test (num, data) VALUES (%s, %s)",
-            (100, "abc'def"))
+validator.expect_column_values_to_not_be_null(column="passenger_count")
 
-        # Query the database and obtain data as Python objects.
-        cur.execute("SELECT * FROM test")
-        cur.fetchone()
-        # will return (1, 100, "abc'def")
+validator.expect_column_values_to_be_between(
+    column="congestion_surcharge", min_value=0, max_value=1000
+)
 
-        # You can use `cur.fetchmany()`, `cur.fetchall()` to return a list
-        # of several records, or even iterate on the cursor
-        for record in cur:
-            print(record)
+validator.save_expectation_suite(discard_failed_expectations=False)
 
-        # Make the changes to the database persistent
-        conn.commit()
+my_checkpoint_name = "my_sql_checkpoint"
+
+checkpoint = Checkpoint(
+    name=my_checkpoint_name,
+    run_name_template="%Y%m%d-%H%M%S-my-run-name-template",
+    data_context=context,
+    batch_request=batch_request,
+    expectation_suite_name=expectation_suite_name,
+    action_list=[
+        {
+            "name": "store_validation_result",
+            "action": {"class_name": "StoreValidationResultAction"},
+        },
+        {"name": "update_data_docs", "action": {"class_name": "UpdateDataDocsAction"}},
+    ],
+)
+
+checkpoint_result = checkpoint.run()
+
+print(checkpoint.get_config().to_yaml_str())
+
+# This may need to be run in a Jupyter notebook
+context.open_data_docs()
+
 ```
